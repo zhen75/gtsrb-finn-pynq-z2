@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data
+data/
+datasets/
+
+# Model files
+*.ckpt
+*.pth
+*.pt
+checkpoints/
+
+# Logs
+logs/
+runs/
+lightning_logs/
+
+# FPGA and export build files
+build/
+output_*/
+*.onnx
+*.bit
+*.hwh
+*.xsa
+*.jou
+*.log
+.Xil/
+
+# IDE
+.vscode/
+.idea/
+
+# System files
+.DS_Store
