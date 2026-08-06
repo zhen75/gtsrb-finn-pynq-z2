@@ -22,8 +22,13 @@ checkpoints/
 logs/
 runs/
 lightning_logs/
+archives/
 ptq_experiments/
 qat_experiments/
+
+# Local stage analysis and evidence drafts
+evidence/stage12/
+src/archive_stage12.py
 
 # FPGA and export build files
 build/
