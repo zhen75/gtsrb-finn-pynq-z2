@@ -14,7 +14,7 @@ from brevitas.quant import Int8ActPerTensorFloat
 class QuantVgg(L.LightningModule):
     def __init__(
         self,
-        lr=1e-3,
+        lr=1e-4,
         class_weights=None,
         dropout=0.2,
         weight_bit=8,
@@ -117,6 +117,12 @@ class QuantVgg(L.LightningModule):
         x = self.classifier(x)
 
         return x
+
+    def on_train_epoch_start(self):
+        if self.current_epoch >= 2:
+            for module in self.modules():
+                if isinstance(module, nn.BatchNorm2d):
+                    module.eval()
 
     def training_step(self, batch, batch_idx):
         x, y = batch

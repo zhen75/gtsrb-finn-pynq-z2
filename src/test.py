@@ -1,11 +1,11 @@
 import torch
 from lightning.pytorch import Trainer
-
+from lightning.pytorch.loggers import CSVLogger
 import gtsrb_utils
 from tiny_vgg import TinyVgg
 
 
-checkpoint_path = "checkpoints/tiny_vgg-best-epoch=24-val_acc=0.985.ckpt"
+checkpoint_path = "checkpoints/tiny_vgg-best-epoch=37-val_acc=0.981.ckpt"
 
 _, _, test_loader, _ = gtsrb_utils.get_gtsrb_loaders(num_workers=0)
 
@@ -16,6 +16,7 @@ checkpoint = torch.load(
 )
 
 class_weights = checkpoint["state_dict"]["class_weights"]
+logger = CSVLogger(save_dir="logs",name = "tiny_vgg_test")
 
 model = TinyVgg.load_from_checkpoint(
     checkpoint_path,
@@ -26,7 +27,7 @@ model = TinyVgg.load_from_checkpoint(
 trainer = Trainer(
     accelerator="auto",
     devices=1,
-    logger=False,
+    logger=logger,
     enable_checkpointing=False,
 )
 

@@ -22,14 +22,27 @@ checkpoints/
 logs/
 runs/
 lightning_logs/
+ptq_experiments/
+qat_experiments/
 
 # FPGA and export build files
 build/
 output_*/
+finn_build/
+build_dataflow/
+ipgen/
+code_gen_*/
+project_*/
+vivado_*/
+rtlsim_*/
 *.onnx
+*.onnx.data
 *.bit
 *.hwh
 *.xsa
+*.xpr
+*.wdb
+*.str
 *.jou
 *.log
 .Xil/
