@@ -1,4 +1,9 @@
 import torch
+import random
+import numpy as np
+
+from pathlib import Path
+from quant_vgg import QuantVgg
 
 from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 
@@ -196,3 +201,104 @@ def get_gtsrb_loaders(
     # ==============================
 
     return (train_loader, val_loader, test_loader, class_weights)
+
+
+def get_npy(model, dataloader, target):
+    images_list = []
+    labels_list = []
+
+    model.eval()
+    with torch.no_grad():
+        for images, labels in dataloader:
+            quantized = model.quant_input(images)
+            integer_codes = quantized.int(float_datatype=True)
+
+            integer_codes = integer_codes.permute(0, 2, 3, 1)
+
+            images_list.append(integer_codes.detach().cpu().numpy())
+            labels_list.append(labels.detach().cpu().numpy())
+
+    images = np.concatenate(images_list, axis=0)
+    labels = np.concatenate(labels_list, axis=0)
+
+    inputs_path = target / "test_inputs_int8_w4a4.npy"
+    labels_path = target / "test_labels.npy"
+
+    np.save(inputs_path, images)
+    np.save(labels_path, labels)
+
+
+def get_expected_outputs(model, dataloader, target):
+    outputs_list = []
+    predictions_list = []
+    labels_list = []
+
+    model.eval()
+
+    with torch.no_grad():
+        for images, labels in dataloader:
+            outputs = model(images)
+            predictions = outputs.argmax(dim=1)
+
+            outputs_list.append(outputs.cpu().numpy())
+            predictions_list.append(predictions.cpu().numpy())
+            labels_list.append(labels.cpu().numpy())
+
+        expected_outputs = np.concatenate(outputs_list, axis=0).astype(np.float32)
+        predicted_labels = np.concatenate(predictions_list, axis=0).astype(np.int64)
+        true_labels = np.concatenate(labels_list, axis=0).astype(np.int64)
+
+        np.save(
+            target / "test_expected_w4a4.npy",
+            expected_outputs,
+        )
+        np.save(
+            target / "test_pred_labels_w4a4.npy",
+            predicted_labels,
+        )
+
+        saved_labels = np.load(target / "test_labels.npy")
+        assert np.array_equal(true_labels, saved_labels)
+
+        accuracy = np.mean(predicted_labels == true_labels)
+
+        print("Expected output shape:", expected_outputs.shape)
+        print("Prediction shape:", predicted_labels.shape)
+        print("Test accuracy:", accuracy)
+
+
+if __name__ == "__main__":
+    target = Path("validation_npy")
+    target.mkdir(parents=True, exist_ok=True)
+
+    weight_path = "qat_experiments/experiment_5/w4a4_qat.pth"
+
+    state_dict = torch.load(
+        weight_path,
+        map_location="cpu",
+        weights_only=True,
+    )
+
+    model = QuantVgg(
+        weight_bit=4,
+        activate_bit=4,
+        dropout=0.2,
+        class_weights=torch.ones(43),
+    )
+
+    model.load_state_dict(state_dict, strict=True)
+    model.eval()
+
+    _, _, test_loader, _ = get_gtsrb_loaders()
+
+    get_npy(
+        model=model,
+        dataloader=test_loader,
+        target=target,
+    )
+
+    get_expected_outputs(
+        model=model,
+        dataloader=test_loader,
+        target=target,
+    )
