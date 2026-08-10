@@ -10,6 +10,10 @@ from pathlib import Path
 def train(model, train_loader, val_loader, epochs, path):
     logger = TensorBoardLogger(save_dir="logs", name="tiny_vgg")
 
+    early_stop_callback = EarlyStopping(
+        monitor="val_acc", min_delta=0.00, patience=10, verbose=True, mode="max"
+    )
+
     checkpoint_callback = ModelCheckpoint(
         monitor="val_acc",
         mode="max",
@@ -31,7 +35,7 @@ def train(model, train_loader, val_loader, epochs, path):
         logger=logger,
         accelerator="auto",
         devices=1,
-        callbacks=[checkpoint_callback, f1_checkpoint_callback],
+        callbacks=[checkpoint_callback, f1_checkpoint_callback, early_stop_callback],
     )
 
     trainer.fit(

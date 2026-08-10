@@ -82,8 +82,7 @@ def save_result(model, onnx_path, pth_path):
         model,
         args=dummy_input,
         export_path=str(onnx_path),
-        dynamo=True,
-        optimize=True,
+        dynamo=False,
     )
     torch.save(model.state_dict(), str(pth_path))
 
@@ -98,16 +97,16 @@ def get_args():
         "--weight",
         type=str,
         default="w8",
-        choices=["w8", "w4", "w2"],
-        help="指定网络权重的量化位宽 (w8: 8-bit, w4: 4-bit, w2: 2-bit)",
+        choices=["w8", "w4", "w2", "w1"],
+        help="指定网络权重的量化位宽 (w8: 8-bit, w4: 4-bit, w2: 2-bit, w1: 1-bit)",
     )
 
     parser.add_argument(
         "--activate",
         type=str,
         default="a8",
-        choices=["a8", "a4", "a2"],
-        help="指定网络激活值的量化位宽 (a8: 8-bit, a4: 4-bit, a2: 2-bit)",
+        choices=["a8", "a4", "a2", "a1"],
+        help="指定网络激活值的量化位宽 (a8: 8-bit, a4: 4-bit, a2: 2-bit, a1: 1-bit)",
     )
 
     parser.add_argument(
@@ -122,9 +121,9 @@ def get_args():
 
 
 def translate(args):
-    weight_map = {"w8": 8, "w4": 4, "w2": 2}
+    weight_map = {"w8": 8, "w4": 4, "w2": 2, "w1": 1}
 
-    activate_map = {"a8": 8, "a4": 4, "a2": 2}
+    activate_map = {"a8": 8, "a4": 4, "a2": 2, "a1": 1}
 
     return weight_map[args.weight], activate_map[args.activate]
 
@@ -177,7 +176,7 @@ def main():
     elif args.mode == "qat":
         print("start QAT")
         calibrate(ckpt_path, train_loader, model)
-        best_model_path = train(model, train_loader, val_loader, 10, target)
+        best_model_path = train(model, train_loader, val_loader, 50, target)
         checkpoint = torch.load(best_model_path, map_location="cpu")
         model.load_state_dict(checkpoint["state_dict"], strict=True)
         print("QAT complet")

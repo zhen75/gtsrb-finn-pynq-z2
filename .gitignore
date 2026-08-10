@@ -52,6 +52,7 @@ rtlsim_*/
 *.str
 *.jou
 *.log
+*_bundle.tar.gz
 .Xil/
 
 # IDE

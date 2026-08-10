@@ -9,7 +9,8 @@ from brevitas.quant import Int32Bias
 from brevitas.quant import Int8WeightPerChannelFloat
 from brevitas.quant import Uint8ActPerTensorFloat
 from brevitas.quant import Int8ActPerTensorFloat
-
+from brevitas.quant import SignedBinaryActPerTensorConst
+from brevitas.quant import SignedBinaryWeightPerTensorConst
 
 class QuantVgg(L.LightningModule):
     def __init__(
@@ -22,9 +23,15 @@ class QuantVgg(L.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["class_weights"])
+        if weight_bit == 1:
+            quant_weights = SignedBinaryWeightPerTensorConst
+        else:
+            quant_weights = Int8WeightPerChannelFloat.let(bit_width=weight_bit)
 
-        quant_weights = Int8WeightPerChannelFloat.let(bit_width=weight_bit)
-        quant_activate = Uint8ActPerTensorFloat.let(bit_width=activate_bit)
+        if activate_bit == 1:
+            quant_activate = SignedBinaryActPerTensorConst
+        else:
+            quant_activate = Uint8ActPerTensorFloat.let(bit_width=activate_bit)
 
         if class_weights is not None:
             self.register_buffer("class_weights", class_weights)
@@ -101,9 +108,7 @@ class QuantVgg(L.LightningModule):
             ),
             qnn.QuantReLU(act_quant=quant_activate, return_quant_tensor=True),
             nn.Dropout(self.dropout),
-            qnn.QuantLinear(
-                256, 43, weight_quant=quant_weights, bias_quant=Int32Bias
-            ),
+            qnn.QuantLinear(256, 43, weight_quant=quant_weights, bias_quant=Int32Bias),
         )
 
     def forward(self, x):

@@ -1,8 +1,7 @@
 # Quantized Traffic Sign Recognition on PYNQ-Z2
 
-This project trains a small CNN for GTSRB traffic sign recognition. The current
-training code uses PyTorch Lightning. The next step is quantization with
-Brevitas and FPGA deployment with FINN on a PYNQ-Z2 board.
+This project trains a small CNN for GTSRB traffic sign recognition, quantizes it
+with Brevitas, and deploys it with FINN on a PYNQ-Z2 board.
 
 ## Current features
 
@@ -14,6 +13,21 @@ Brevitas and FPGA deployment with FINN on a PYNQ-Z2 board.
 - TensorBoard logging
 - Accuracy and macro F1 checkpoints
 - Separate checkpoint test script
+- QAT experiments from W8A8 to binary-weight W1A4
+- QONNX preprocessing export for NHWC UINT8 input
+- FINN W4A4 bitstream build and PYNQ-Z2 smoke test
+
+## QAT trade-off
+
+The chart uses the weight-bit × activation-bit product as a simple quantization
+cost proxy. Red points are non-dominated accuracy-cost configurations on the
+official GTSRB test split.
+
+![QAT accuracy and Pareto frontier](analysis/qat_accuracy_pareto.png)
+
+Current Pareto configurations: `W1A4`, `W2A4`, `W4A4`, `W4A8`, and `W8A8`.
+The W1A4 experiment uses binary per-tensor weights; W2/W4/W8 use per-channel
+weight scaling.
 
 ## Project structure
 
@@ -25,6 +39,9 @@ Brevitas and FPGA deployment with FINN on a PYNQ-Z2 board.
 `-- src/
     |-- gtsrb_utils.py   # Data split, transforms, loaders, and class weights
     |-- tiny_vgg.py      # Lightning model
+    |-- quant_vgg.py     # Brevitas QAT model, including binary quantization
+    |-- run_experiment.py # QAT/PTQ experiment, test, and QONNX export
+    |-- preprocessor.py  # Export NHWC UINT8 preprocessing to QONNX
     |-- train.py         # Training and checkpoint creation
     `-- test.py          # Test one saved checkpoint without training
 ```
@@ -66,16 +83,13 @@ python src/test.py
 
 The test script loads the selected checkpoint and does not run training.
 
-## FPGA plan
+## FPGA status
 
-1. Keep the floating-point model as the baseline.
-2. Build W8A8 and W4A8 models with Brevitas.
-3. Export the quantized model to QONNX.
-4. Build and simulate the accelerator with FINN.
-5. Deploy it on PYNQ-Z2.
-6. Measure accuracy, macro F1, LUT, FF, BRAM, DSP, latency, FPS, and power.
+The W4A4 QAT classifier has completed QONNX export, FINN compilation, Vivado
+synthesis, and a PYNQ-Z2 smoke test. The next deployment candidates are W2A4
+and W1A4. FPGA build artifacts, models, datasets, and local experiment outputs
+are intentionally not committed.
 
 ## Status
 
-The floating-point training pipeline is complete. Quantization and FPGA
-deployment are future work.
+The floating-point, QAT, and first FPGA deployment stages are complete.
