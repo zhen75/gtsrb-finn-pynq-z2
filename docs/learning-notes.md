@@ -22,3 +22,11 @@ VGG model for FPGA deployment.
 * **Scale Propagation**: Used `return_quant_tensor=True` on the `QuantReLU` layers directly preceding `QuantLinear` layers to successfully pass input scales for 32-bit bias quantization.
 * **QONNX Export**: Used `brevitas.export.export_qonnx()` on the CPU to avoid
   device conflicts during export.
+
+## 3. Binary activation and ReLU
+
+I initially used `SignedBinaryActPerTensorConst` with `QuantReLU`. This was
+incorrect: ReLU removes negative values, so the signed binary quantizer mapped
+the activations to a constant `+1` and the model collapsed. For 1-bit signed
+activations, I use `QuantHardTanh` with `SignedBinaryActPerTensorConst` so the
+output can represent both `-1` and `+1`. ReLU remains unchanged for A2/A4/A8.

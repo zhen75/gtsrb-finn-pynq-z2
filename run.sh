@@ -5,8 +5,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/src"
 mode="qat"
-for weight in 8 4 2 1; do
-    for activate in 8 4 2 1; do
+for activate in "a1"; do
+    for weight in "w8" "w4" "w2"; do
         echo "launching experiment: mode=${mode} weight=${weight} activate=${activate}"
 
         python run_experiment.py \

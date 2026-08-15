@@ -35,6 +35,7 @@ src/archive_stage12.py
 # FPGA and export build files
 build/
 output_*/
+estimate_*/
 finn_build/
 build_dataflow/
 ipgen/

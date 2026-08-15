@@ -25,9 +25,11 @@ official GTSRB test split.
 
 ![QAT accuracy and Pareto frontier](analysis/qat_accuracy_pareto.png)
 
-Current Pareto configurations: `W1A4`, `W2A4`, `W4A4`, `W4A8`, and `W8A8`.
-The W1A4 experiment uses binary per-tensor weights; W2/W4/W8 use per-channel
-weight scaling.
+All 16 configurations were trained for 60 epochs without early stopping under
+one seed. The observed accuracy Pareto frontier is `W1A1`, `W1A2`, `W1A4`,
+`W2A4`, `W4A4`, and `W4A8`; the practical high-accuracy frontier starts at
+`W1A4`. The W1 experiments use binary per-tensor weights; W2/W4/W8 use
+per-channel weight scaling.
 
 ## Project structure
 
@@ -71,6 +73,28 @@ Open TensorBoard with:
 
 ```bash
 tensorboard --logdir logs
+```
+
+## Mixed-precision QAT
+
+`QuantVgg` accepts one weight bit width per quantized weight layer and one
+activation bit width per `QuantReLU` layer:
+
+```text
+weights:    Conv1, Conv2, Conv3, Conv4, Conv5, FC1, FC2
+activations: ReLU1, ReLU2, ReLU3, ReLU4, ReLU5, FC1 ReLU
+```
+
+For example, run the W1A1 model with W8A8 first and last boundaries:
+
+```bash
+bash run_w1a1_boundary_experiments.sh
+```
+
+Run the uniform W/A sweep with:
+
+```bash
+bash run_experiment.sh
 ```
 
 ## Testing

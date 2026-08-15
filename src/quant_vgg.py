@@ -12,26 +12,63 @@ from brevitas.quant import Int8ActPerTensorFloat
 from brevitas.quant import SignedBinaryActPerTensorConst
 from brevitas.quant import SignedBinaryWeightPerTensorConst
 
+
+WEIGHT_LAYER_COUNT = 7
+ACTIVATION_LAYER_COUNT = 6
+
+
+def _as_bit_widths(bit_widths, expected_count, name):
+    if isinstance(bit_widths, int):
+        bit_widths = [bit_widths] * expected_count
+    else:
+        bit_widths = list(bit_widths)
+
+    if len(bit_widths) != expected_count:
+        raise ValueError(
+            f"{name} must contain {expected_count} values, got {len(bit_widths)}"
+        )
+
+    return bit_widths
+
+
+def _weight_quantizer(bit_width):
+    if bit_width == 1:
+        return SignedBinaryWeightPerTensorConst
+    return Int8WeightPerChannelFloat.let(bit_width=bit_width)
+
+
+def _activation_quantizer(bit_width):
+    if bit_width == 1:
+        return SignedBinaryActPerTensorConst
+    return Uint8ActPerTensorFloat.let(bit_width=bit_width)
+
+
+def _quant_activation_layer(bit_width, return_quant_tensor=False):
+    activation_class = qnn.QuantHardTanh if bit_width == 1 else qnn.QuantReLU
+    return activation_class(
+        act_quant=_activation_quantizer(bit_width),
+        return_quant_tensor=return_quant_tensor,
+    )
+
+
 class QuantVgg(L.LightningModule):
     def __init__(
         self,
         lr=1e-4,
         class_weights=None,
         dropout=0.2,
-        weight_bit=8,
-        activate_bit=8,
+        weight_bit=(8,) * WEIGHT_LAYER_COUNT,
+        activate_bit=(8,) * ACTIVATION_LAYER_COUNT,
     ):
         super().__init__()
         self.save_hyperparameters(ignore=["class_weights"])
-        if weight_bit == 1:
-            quant_weights = SignedBinaryWeightPerTensorConst
-        else:
-            quant_weights = Int8WeightPerChannelFloat.let(bit_width=weight_bit)
-
-        if activate_bit == 1:
-            quant_activate = SignedBinaryActPerTensorConst
-        else:
-            quant_activate = Uint8ActPerTensorFloat.let(bit_width=activate_bit)
+        weight_bits = _as_bit_widths(
+            weight_bit, WEIGHT_LAYER_COUNT, "weight_bit"
+        )
+        activate_bits = _as_bit_widths(
+            activate_bit, ACTIVATION_LAYER_COUNT, "activate_bit"
+        )
+        quant_weights = [_weight_quantizer(bit) for bit in weight_bits]
 
         if class_weights is not None:
             self.register_buffer("class_weights", class_weights)
@@ -56,35 +93,35 @@ class QuantVgg(L.LightningModule):
 
         self.block1 = nn.Sequential(
             qnn.QuantConv2d(
-                3, 32, 3, padding=1, bias=False, weight_quant=quant_weights
+                3, 32, 3, padding=1, bias=False, weight_quant=quant_weights[0]
             ),
             nn.BatchNorm2d(32),
-            qnn.QuantReLU(act_quant=quant_activate),
+            _quant_activation_layer(activate_bits[0]),
             nn.MaxPool2d(2),
         )
         self.block2 = nn.Sequential(
             qnn.QuantConv2d(
-                32, 32, 3, padding=1, bias=False, weight_quant=quant_weights
+                32, 32, 3, padding=1, bias=False, weight_quant=quant_weights[1]
             ),
             nn.BatchNorm2d(32),
-            qnn.QuantReLU(act_quant=quant_activate),
+            _quant_activation_layer(activate_bits[1]),
             nn.MaxPool2d(2),
         )
         self.block3 = nn.Sequential(
             qnn.QuantConv2d(
-                32, 64, 3, padding=1, bias=False, weight_quant=quant_weights
+                32, 64, 3, padding=1, bias=False, weight_quant=quant_weights[2]
             ),
             nn.BatchNorm2d(64),
-            qnn.QuantReLU(act_quant=quant_activate),
+            _quant_activation_layer(activate_bits[2]),
             nn.MaxPool2d(2),
         )
 
         self.block4 = nn.Sequential(
             qnn.QuantConv2d(
-                64, 64, 3, padding=1, bias=False, weight_quant=quant_weights
+                64, 64, 3, padding=1, bias=False, weight_quant=quant_weights[3]
             ),
             nn.BatchNorm2d(64),
-            qnn.QuantReLU(act_quant=quant_activate),
+            _quant_activation_layer(activate_bits[3]),
             nn.MaxPool2d(2),
         )
 
@@ -95,20 +132,22 @@ class QuantVgg(L.LightningModule):
                 3,
                 padding=1,
                 bias=False,
-                weight_quant=quant_weights,
+                weight_quant=quant_weights[4],
             ),
             nn.BatchNorm2d(128),
-            qnn.QuantReLU(act_quant=quant_activate, return_quant_tensor=True),
+            _quant_activation_layer(activate_bits[4], return_quant_tensor=True),
         )
 
         self.classifier = nn.Sequential(
             nn.Flatten(),
             qnn.QuantLinear(
-                1152, 256, weight_quant=quant_weights, bias_quant=Int32Bias
+                1152, 256, weight_quant=quant_weights[5], bias_quant=Int32Bias
             ),
-            qnn.QuantReLU(act_quant=quant_activate, return_quant_tensor=True),
+            _quant_activation_layer(activate_bits[5], return_quant_tensor=True),
             nn.Dropout(self.dropout),
-            qnn.QuantLinear(256, 43, weight_quant=quant_weights, bias_quant=Int32Bias),
+            qnn.QuantLinear(
+                256, 43, weight_quant=quant_weights[6], bias_quant=Int32Bias
+            ),
         )
 
     def forward(self, x):

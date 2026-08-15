@@ -37,13 +37,12 @@ def generate_path(args):
     target = get_next_available_file(base_folder=PROJECT_ROOT / file_name)
     target.mkdir(parents=True, exist_ok=True)
 
-    template_onnx = "{a}{b}_{mode}.onnx"
-    template_pth = "{a}{b}_{mode}.pth"
+    template_onnx = "{name}_{mode}.onnx"
+    template_pth = "{name}_{mode}.pth"
 
-    onnx_file_name = template_onnx.format(
-        a=args.weight, b=args.activate, mode=args.mode
-    )
-    pth_file_name = template_pth.format(a=args.weight, b=args.activate, mode=args.mode)
+    experiment_name = args.name or precision_name(*translate(args))
+    onnx_file_name = template_onnx.format(name=experiment_name, mode=args.mode)
+    pth_file_name = template_pth.format(name=experiment_name, mode=args.mode)
 
     pth_path = target / pth_file_name
     onnx_path = target / onnx_file_name
@@ -96,17 +95,15 @@ def get_args():
     parser.add_argument(
         "--weight",
         type=str,
-        default="w8",
-        choices=["w8", "w4", "w2", "w1"],
-        help="指定网络权重的量化位宽 (w8: 8-bit, w4: 4-bit, w2: 2-bit, w1: 1-bit)",
+        default="8",
+        help="7 个权重量化层的位宽，例如 8 或 8,1,1,1,1,1,8",
     )
 
     parser.add_argument(
         "--activate",
         type=str,
-        default="a8",
-        choices=["a8", "a4", "a2", "a1"],
-        help="指定网络激活值的量化位宽 (a8: 8-bit, a4: 4-bit, a2: 2-bit, a1: 1-bit)",
+        default="8",
+        help="6 个 QuantReLU 层的位宽，例如 8 或 8,1,1,1,1,8",
     )
 
     parser.add_argument(
@@ -117,20 +114,46 @@ def get_args():
         help="指定量化方法PTQ或者QAT",
     )
 
+    parser.add_argument(
+        "--name",
+        type=str,
+        default=None,
+        help="实验和导出文件的名称；省略时从位宽列表生成",
+    )
+
     return parser.parse_args()
 
 
+def parse_bit_widths(value, count, argument_name):
+    value = value.lower().replace("w", "").replace("a", "")
+    bit_widths = [int(bit) for bit in value.split(",")]
+
+    if len(bit_widths) == 1:
+        bit_widths *= count
+    if len(bit_widths) != count:
+        raise ValueError(f"{argument_name} must contain 1 or {count} values")
+    if any(bit not in {1, 2, 4, 8} for bit in bit_widths):
+        raise ValueError(f"{argument_name} values must be one of 1, 2, 4, or 8")
+
+    return bit_widths
+
+
+def precision_name(weight_bits, activate_bits):
+    if len(set(weight_bits)) == 1 and len(set(activate_bits)) == 1:
+        return f"w{weight_bits[0]}a{activate_bits[0]}"
+    return "w" + "-".join(map(str, weight_bits)) + "_a" + "-".join(
+        map(str, activate_bits)
+    )
+
+
 def translate(args):
-    weight_map = {"w8": 8, "w4": 4, "w2": 2, "w1": 1}
+    return (
+        parse_bit_widths(args.weight, 7, "--weight"),
+        parse_bit_widths(args.activate, 6, "--activate"),
+    )
 
-    activate_map = {"a8": 8, "a4": 4, "a2": 2, "a1": 1}
 
-    return weight_map[args.weight], activate_map[args.activate]
-
-
-def get_next_available_file(
-    base_folder=PROJECT_ROOT / "ptq_experiments", folder="experiment"
-):
+def get_next_available_file(base_folder, folder="experiment"):
     base_path = Path(base_folder)
     counter = 1
 
@@ -176,7 +199,7 @@ def main():
     elif args.mode == "qat":
         print("start QAT")
         calibrate(ckpt_path, train_loader, model)
-        best_model_path = train(model, train_loader, val_loader, 50, target)
+        best_model_path = train(model, train_loader, val_loader, 60, target)
         checkpoint = torch.load(best_model_path, map_location="cpu")
         model.load_state_dict(checkpoint["state_dict"], strict=True)
         print("QAT complet")
